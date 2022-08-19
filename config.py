@@ -42,6 +42,8 @@ _C.DATA.NUM_WORKERS = 8
 # Model settings
 # -----------------------------------------------------------------------------
 _C.MODEL = CN()
+# Normal training or colorization training
+_C.MODEL.COLORIZATION = False
 # Model type
 _C.MODEL.TYPE = 'swin'
 # Model name
@@ -59,6 +61,9 @@ _C.MODEL.DROP_RATE = 0.0
 _C.MODEL.DROP_PATH_RATE = 0.1
 # Label Smoothing
 _C.MODEL.LABEL_SMOOTHING = 0.1
+# MAE Masking ratio
+_C.MODEL.MIN_MASK_RATIO = 0.00
+_C.MODEL.MAX_MASK_RATIO = 0.75
 
 # Swin Transformer parameters
 _C.MODEL.SWIN = CN()
@@ -234,9 +239,6 @@ _C.EVAL_MODE = False
 _C.THROUGHPUT_MODE = False
 # local rank for DistributedDataParallel, given by command line argument
 _C.LOCAL_RANK = 0
-# for acceleration
-_C.FUSED_WINDOW_PROCESS = False
-_C.FUSED_LAYERNORM = False
 
 
 def _update_config_from_file(config, cfg_file):
@@ -292,15 +294,6 @@ def update_config(config, args):
         config.EVAL_MODE = True
     if args.throughput:
         config.THROUGHPUT_MODE = True
-
-    # for acceleration
-    if args.fused_window_process:
-        config.FUSED_WINDOW_PROCESS = True
-    if args.fused_layernorm:
-        config.FUSED_LAYERNORM = True
-    ## Overwrite optimizer if not None, currently we use it for [fused_adam, fused_lamb]
-    if args.optim:
-        config.TRAIN.OPTIMIZER.NAME = args.optim
 
     # set local rank for distributed training
     config.LOCAL_RANK = args.local_rank
