@@ -52,9 +52,6 @@ dependencies:
     - tifffile==2021.11.2
     - timm==0.4.12
     - toml==0.10.2
-    - torch==1.10.2+cu113
-    - torchaudio==0.10.2+rocm4.1
-    - torchvision==0.11.3+cu113
     - traitlets==5.3.0
     - typing-extensions==4.2.0
     - wcwidth==0.2.5
