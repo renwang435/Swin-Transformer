@@ -1,0 +1,13 @@
+MODEL:
+  TYPE: swin_masked
+  NAME: swin_tiny_patch4_window7_224
+  DROP_PATH_RATE: 0.2
+  MIN_MASK_RATIO: 0.00
+  MAX_MASK_RATIO: 1.00
+  SWIN:
+    IN_CHANS: 4
+    EMBED_DIM: 96
+    DEPTHS: [ 2, 2, 6, 2 ]
+    NUM_HEADS: [ 3, 6, 12, 24 ]
+    WINDOW_SIZE: 7
+    PATCH_SIZE: 4
