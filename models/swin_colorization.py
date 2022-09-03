@@ -487,7 +487,7 @@ class ColorizationSwinTransformer(nn.Module):
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, 
+                 use_checkpoint=False, min_mask_ratio=0.00, max_mask_ratio=1.00, 
                  **kwargs):
         super().__init__()
 
@@ -500,6 +500,9 @@ class ColorizationSwinTransformer(nn.Module):
         self.mlp_ratio = mlp_ratio
 
         self.patch_size = patch_size
+        self.mask_patch_size = 16               # From MAE
+        self.min_mask_ratio = min_mask_ratio
+        self.max_mask_ratio = max_mask_ratio
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
