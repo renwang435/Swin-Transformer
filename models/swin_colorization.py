@@ -559,9 +559,92 @@ class ColorizationSwinTransformer(nn.Module):
     @torch.jit.ignore
     def no_weight_decay_keywords(self):
         return {'relative_position_bias_table'}
+    
+    def maskify(self, x):
+        b, c, h, w = x.shape
+        patched_img = self.patchify(x)
+
+        # Training: Mask randomly
+        if self.training:
+            drop_to_use = np.random.uniform(low=self.min_mask_ratio, 
+                                            high=self.max_mask_ratio)
+        else:
+            drop_to_use = 0.00
+
+        _, mask, _ = self.random_masking(patched_img, drop_to_use)
+        # masked_img = patched_img * mask.unsqueeze(-1)
+
+        # import ipdb; ipdb.set_trace()
+
+        # Apply mask and concatenate with image
+        # mask (N, L) --> mask (N, L, D)
+        # patched_img --> (N, L, D)
+        mask = mask.unsqueeze(-1).repeat_interleave(self.mask_patch_size ** 2, dim=-1)
+        unpatched_mask = self.unpatchify_mask(mask, h, w)
+        x *= unpatched_mask
+        masked_img = torch.cat([x, unpatched_mask], dim=1)
+
+        return masked_img.type(torch.float32), mask
+ 
+    def patchify(self, imgs):
+        """
+        imgs: (N, 1, H, W)
+        x: (N, L, patch_size**2 * 1)
+        """
+        p = self.mask_patch_size
+        assert imgs.shape[2] % p == 0 and imgs.shape[3] % p == 0
+
+        h = imgs.shape[2] // p
+        w = imgs.shape[3] // p
+        x = imgs.reshape(shape=(imgs.shape[0], 1, h, p, w, p))
+        x = torch.einsum('nchpwq->nhwpqc', x)
+        x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2))
+        
+        return x
+    
+    def unpatchify_mask(self, x, h, w):
+        """
+        x: (N, L, patch_size**2 * 1)
+        imgs: (N, 1, H, W)
+        """
+        p = self.mask_patch_size
+        assert (h // p) * (w // p) == x.shape[1]
+        
+        x = x.reshape(shape=(x.shape[0], h // p, w // p, p, p, 1))
+        x = torch.einsum('nhwpqc->nchpwq', x)
+        imgs = x.reshape(shape=(x.shape[0], 1, h, w))
+
+        return imgs
+    
+    def random_masking(self, x, mask_ratio):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+        x: [N, L, D], sequence
+        """
+
+        N, L, D = x.shape  # batch, length, dim
+        len_keep = int(L * (1 - mask_ratio))
+        
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+        
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 1 is keep, 0 is remove
+        mask = torch.zeros([N, L], device=x.device)
+        mask[:, :len_keep] = 1
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
 
     def colorize_preprocess(self, x):
-        # import ipdb; ipdb.set_trace()
         lab_images = [torch.from_numpy(rgb2lab(img.cpu().numpy().transpose(1, 2, 0))[:, :, 0]).to(device=x.device, dtype=x.dtype) for img in x]
         input_tensor = torch.stack(lab_images).unsqueeze(dim=1)
         input_tensor = torch.clamp(input_tensor, min=0., max=100.)
@@ -591,6 +674,7 @@ class ColorizationSwinTransformer(nn.Module):
         # import ipdb; ipdb.set_trace()
 
         x = self.colorize_preprocess(x)
+        x, _ = self.maskify(x)
         x = self.forward_features(x)
         x = self.head(x)
         return x
